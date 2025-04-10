@@ -71,6 +71,9 @@ typedef enum
 } motor_ctl_t;
 
 /* Private define ------------------------------------------------------------*/
+// Reset device name on every startup 
+#define RESET_DEVICE_NAME true
+
 /* Define I2C Slave Address --------------------------------------------------*/
 #define SLAVE_ADDRESS 0x30
 
@@ -132,6 +135,7 @@ char* getchar_arr(void);
 void Delay (uint32_t nCount);
 uint16_t get_ADC_data(ADC_TypeDef* ADCx);
 uint16_t count_digits(uint16_t number);
+void normalize_newlines(char *str);
 /* Private functions ---------------------------------------------------------*/
 
 /**
@@ -227,6 +231,11 @@ void init(void)
   /* Wait until Data EEPROM area unlocked flag is set*/
   while (FLASH_GetFlagStatus(FLASH_FLAG_DUL) == RESET)
   {}
+
+  if (RESET_DEVICE_NAME)
+  {
+    FLASH_ProgramByte(FLASH_DATA_EEPROM_START_PHYSICAL_ADDRESS + ((uint32_t)10), (uint8_t)0);
+  }
 
   name_exists = (bool) FLASH_ReadByte(FLASH_DATA_EEPROM_START_PHYSICAL_ADDRESS + ((uint32_t)10));
 
@@ -506,6 +515,20 @@ void console(void)
 {
   char *rec = getchar_arr();
 
+  normalize_newlines(rec);
+
+  // If the input is exactly "RESET", clear the stored name.
+  if (strcmp(rec, "RESET") == 0)
+  {
+      FLASH_ProgramByte(FLASH_DATA_EEPROM_START_PHYSICAL_ADDRESS + ((uint32_t)10), (uint8_t)0);
+      name_exists = false;
+      printf("Reset done.\n\r");
+      
+      // Free the memory and exit this function (skip further processing).
+      free(rec);
+      return;
+  }
+
   if (name_exists)
   {
     char *token_name = strstr(rec, " ");
@@ -584,6 +607,8 @@ void print_help(void)
   printf("set x            : this sets the valve to 0%% - 100%%, eg: 'set 30'\n");
   printf("get_tmp          : this gets you the device temperature in degrees celsius, not jet implemented\n\r");
   printf("name x           : give me a name, be sure to remember, I only hear if you call me: 'name command', send nothing to remove\n\r");
+  printf("\n\r");
+  printf("RESET            : can be sent even with a name to remove the name, be careful on a bus!\n\r");
   printf("---\n\r");
   printf("help             : show this help\n\r");
   printf("\n\rok\n\r");
@@ -778,6 +803,44 @@ char* getchar_arr(void)
   out_arr[(count_rec - count_out) - 1] = '\0';
   
   return out_arr;
+}
+
+/**
+ * Normalize newlines in-place:
+ * - Replace every carriage return '\r' with newline '\n'
+ * - Remove any duplicate consecutive newline characters so that each newline appears only once.
+ */
+void normalize_newlines(char *str) {
+  if (str == NULL) return;
+
+  int i = 0;  // read index
+  int j = 0;  // write index
+  bool lastWasNL = false;
+
+  while (str[i] != '\0') {
+      char c = str[i];
+
+      // Convert CR to NL
+      if (c == '\r') {
+          c = '\n';
+      }
+
+      if (c == '\n') {
+          // Only write if the last written char was not already a newline.
+          if (!lastWasNL) {
+              str[j++] = c;
+              lastWasNL = true;
+          }
+          // If already newline, skip writing it.
+      } else {
+          // Non-newline character: write and reset the flag.
+          str[j++] = c;
+          lastWasNL = false;
+      }
+      i++;
+  }
+  // Null-terminate the string.
+  str[j] = '\0';
 }
 
 /**
