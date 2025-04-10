@@ -807,35 +807,17 @@ char* getchar_arr(void)
 
 /**
  * Normalize newlines in-place:
- * - Replace every carriage return '\r' with newline '\n'
- * - Remove any duplicate consecutive newline characters so that each newline appears only once.
- */
+ * - Remove any cr and nl
+*/
 void normalize_newlines(char *str) {
   if (str == NULL) return;
-
+  
   int i = 0;  // read index
   int j = 0;  // write index
-  bool lastWasNL = false;
 
   while (str[i] != '\0') {
-      char c = str[i];
-
-      // Convert CR to NL
-      if (c == '\r') {
-          c = '\n';
-      }
-
-      if (c == '\n') {
-          // Only write if the last written char was not already a newline.
-          if (!lastWasNL) {
-              str[j++] = c;
-              lastWasNL = true;
-          }
-          // If already newline, skip writing it.
-      } else {
-          // Non-newline character: write and reset the flag.
-          str[j++] = c;
-          lastWasNL = false;
+      if (str[i] != '\r' && str[i] != '\n') {
+          str[j++] = str[i];
       }
       i++;
   }
